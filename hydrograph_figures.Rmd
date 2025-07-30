@@ -1,0 +1,395 @@
+---
+title: "hydrograph_figures"
+output: html_document
+date: "2025-07-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1 column width = 85 mm
+2 column widths = 180 mm
+300 dpi at final size (enlarge to 150% to see if it is blurry)
+text min of 8 points at actual size
+- suggest exporting as pdf and then converting to TIFF or EPS using graphics software
+
+
+
+```{r}
+library(dataRetrieval)
+library(tidyverse)
+library(lubridate)
+library(RcppRoll)
+library(DBI)
+library(odbc)
+library(cowplot)
+library(grid)
+library(gridExtra)
+```
+
+```{r copy to clip}
+Copy2Clip <- function(x){
+  write.table(x, "clipboard-1000000", sep="\t", row.names=FALSE, col.names=TRUE)
+}
+```
+#Create connection to SQL db
+```{r SQL db connection}
+con <- dbConnect(odbc(),
+                 Driver="ODBC Driver 17 for SQL Server",
+                 Server="10.30.200.133",
+                 database = "gis_master", #will default to Master_Fish, but you can specify here
+                 uid="Coho_User",
+                 pwd="A111111.",
+                 Encrypt="no")
+```
+
+Palettes 
+```{r}
+wh_palette <- c("#4D617F", "#e0a81c", "#9D3D2D")
+wh_palette_bright <- c("blue", "yellow", "red")
+```
+
+
+
+
+gis_master.seagrant.reach_wettedhabitat
+rkm_length
+
+```{r}
+wh_data <- tbl(con, Id(schema="seagrant", table="REACH_WETTED_HABITAT")) |>
+  select(
+    tributary,
+    surveydate,
+    sampleyear,
+    purpose,
+    samplenum,
+    field_condition,
+    map_condition,
+    rkm_length
+  ) |>
+  collect()
+
+```
+
+```{r}
+wh_summary <- wh_data |>
+  filter(
+    purpose == "Base Flow"
+  ) |>
+  group_by(sampleyear, map_condition) |>
+  summarize(
+    length_km = sum(rkm_length)
+  ) |>
+  ungroup() |>
+  group_by(sampleyear) |>
+  mutate(
+    surveyed_length = sum(length_km),
+    prop_wh_condition = length_km/surveyed_length
+  )
+  
+```
+
+```{r}
+wh_fig <- wh_summary |>
+  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(map_condition))) +
+  geom_bar(stat = "identity", legend = NULL) +
+  theme_classic() +
+  scale_fill_manual(values = wh_palette) +
+  labs(
+    x = NULL,
+    y = "Proportion"
+  ) +
+  theme(
+    legend.position = "none"
+  )
+wh_fig
+  
+```
+
+```{r}
+wh_fig_dry <- wh_summary |>
+  filter(sampleyear == 2021) |>
+  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(map_condition))) +
+  geom_bar(stat = "identity", legend = NULL) +
+  theme_classic() +
+  scale_fill_manual(values = wh_palette) +
+  labs(
+    x = NULL,
+    y = NULL,
+#    y = "Proportion",
+#    caption = "N = 190 km"
+  ) +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.1), breaks = c(0, 0.5, 1)) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+#    plot.caption = element_text(vjust = 3, hjust = 0.5),
+    legend.position = "none",
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(size = 8)
+  )
+wh_fig_dry
+  
+```
+
+
+```{r}
+wh_fig_wet <- wh_summary |>
+  filter(sampleyear == 2017) |>
+  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(map_condition))) +
+  geom_bar(stat = "identity", legend = NULL) +
+  theme_classic() +
+  scale_fill_manual(values = wh_palette) +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.1), breaks = c(0, 0.5, 1)) +
+  labs(
+    x = NULL,
+    y = NULL
+#    y = "Proportion",
+#    caption = "N = 133 km"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+#    plot.caption = element_text(vjust = 3, hjust = 0.5),
+    legend.position = "none",
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(size = 8)
+  )
+wh_fig_wet
+  
+```
+
+
+
+Create standard date lookup table
+```{r}
+#create standard dates
+lookup_dates <- tibble(
+  std_date=(seq.Date(from=as.Date("1903-10-01"),to=as.Date("1904-09-30"), by="day")),
+  month=month(std_date),
+  day=day(std_date))
+```
+
+Retrieve USGS data:
+
+Info on data retrieval package: https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html
+paramater codes:
+00060 discharge (ft3/s)
+00065 stage height (ft)
+00010 temp (C)
+00045 precip (in)
+00400 pH
+
+stat codes:
+00001 max
+00002 min
+00003 mean
+00008 median
+
+Austin: 11467200
+
+
+A= approved for publication, P=provisional
+
+readNWISdv = daily values
+readNWISuv = instantaneous values
+
+
+Load Austin daily mean discharge data from USGS
+```{r}
+#Load flow dataset(s)
+siteNumbers <- c("11467200")
+siteINFO <- readNWISsite(siteNumbers)
+siteINFO  
+
+#list data available for site(s) of interest
+available_data <- whatNWISdata(siteNumber=siteNumbers)
+
+#Get data, rename columns
+parameterCd <- c("00060") #discharge; list all parameters of interest
+statCd <- c("00003") #mean;; list all stats of interest
+startDate <- "2000-10-01"
+endDate <- today()
+
+#read daily values
+usgs_data <- readNWISdv(siteNumbers, 
+                        parameterCd,startDate, endDate)
+
+usgs_data <- renameNWISColumns(usgs_data)|>
+  select(tributary=site_no,
+         date=Date, 
+         flow_cfs=Flow)|>
+  mutate(tributary=str_replace_all(tributary,"11467200", "AUSTIN CREEK"))
+
+```
+
+```{r configure df}
+flow_data <- usgs_data |>
+  mutate(
+    year = year(date),
+    month = month(date),
+    day = day(date)
+  ) |>
+  left_join(lookup_dates, by = c("month", "day")) |>
+  select(tributary, date, std_date, month, day, flow_cfs) |>
+  mutate(
+    water_year = calcWaterYear(as.Date(date)),
+    cohort = water_year-1,
+    winter = paste(as.character(water_year-1), as.character(water_year), sep="-"),
+    disconnected = ifelse(flow_cfs < 2.1, 1, 0)
+  ) |> 
+  filter(date > "2012-09-30" & date < "2023-10-01")
+```
+
+```{r}
+Copy2Clip(flow_data)
+```
+
+
+```{r}
+figure_data <- flow_data|>
+  mutate(flow_cfs_hundreds=flow_cfs/100) |>
+  filter (
+    water_year == 2017 |
+      water_year == 2021
+  ) |>
+ggplot() + 
+#    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
+  geom_col(aes(x = std_date, y = disconnected * 70), fill = "gray85", width = 7) +
+  geom_line(mapping = aes(x = std_date, y = flow_cfs_hundreds), linewidth=0.7, color="#597093")+
+#  geom_hline (yintercept=3, color="darkred")+
+
+  scale_x_date(date_labels="%b")+
+  labs(
+    x = NULL,
+    y = expression("Discharge (Hundreds of ft "^3~"/s)")
+  ) +
+  theme_bw()+ #base_size=12
+  theme(
+        #title = element_text(size=13),
+        title=element_blank(),
+        axis.title.y = element_text(size=11, face="bold"),
+        axis.text.y = element_text(size=10), 
+        axis.text.x = element_text(size=10), #,angle = 90
+        panel.grid.major = element_line(color="gray97"),
+        panel.grid.minor = element_line(color="gray97"))+
+  facet_wrap(~ winter, nrow = 2) +
+  theme(strip.text = element_text(size=10),
+        strip.background = element_rect(fill="gray99"))
+
+figure_data
+```
+
+```{r}
+hydro_fig_dry <- flow_data|>
+  mutate(flow_cfs_hundreds=flow_cfs/100) |>
+  filter (water_year == 2021) |>
+ggplot() + 
+#    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
+  geom_col(aes(x = std_date, y = disconnected * 70), fill = "gray85", width = 7) +
+  geom_line(mapping = aes(x = std_date, y = flow_cfs_hundreds), linewidth=0.5, color="#4D617F")+
+#  geom_hline (yintercept=3, color="darkred")+
+
+  scale_x_date(date_labels="%b")+
+  labs(
+    x = NULL,
+    y = NULL,
+#    y = expression("Discharge (Hundreds of ft "^3~"/s)"),
+    title = "Dry year"
+  ) +
+  theme_classic()+ #base_size=12
+  theme(
+        #title = element_text(size=13),
+        plot.title = element_text(hjust = 0.5, size = 10),
+#        axis.title.y = element_text(size=9, face="bold"),
+        axis.text.y = element_text(size=8),
+        axis.text.x = element_blank(),
+#        axis.text.x = element_text(size=10), #,angle = 90
+        panel.grid.major = element_line(color="gray97"),
+        panel.grid.minor = element_line(color="gray97"),
+        axis.ticks.x = element_blank()
+  )
+
+hydro_fig_dry
+```
+
+```{r}
+hydro_fig_wet <- flow_data|>
+  mutate(flow_cfs_hundreds=flow_cfs/100) |>
+  filter (water_year == 2017) |>
+ggplot() + 
+#    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
+  geom_col(aes(x = std_date, y = disconnected * 70), fill = "gray85", width = 7) +
+  geom_line(mapping = aes(x = std_date, y = flow_cfs_hundreds), linewidth=0.5, color="#4D617F")+
+#  geom_hline (yintercept=3, color="darkred")+
+
+  scale_x_date(date_labels="%b")+
+  labs(
+    x = NULL,
+    y = NULL,
+#    y = expression("Discharge (Hundreds of ft "^3~"/s)"),
+    title = "Wet year"
+  ) +
+  theme_classic()+ #base_size=12
+  theme(
+        #title = element_text(size=13),
+        plot.title = element_text(hjust = 0.5, size = 10),
+#        axis.title.y = element_text(size=9, face="bold"),
+        axis.text.y = element_text(size=8), 
+        axis.text.x = element_text(size=8), #,angle = 90
+        panel.grid.major = element_line(color="gray97"),
+        panel.grid.minor = element_line(color="gray97"))
+
+hydro_fig_wet
+```
+
+```{r}
+library(cowplot)
+library(grid)
+hydro_figs <- 
+  plot_grid(
+    hydro_fig_dry,
+    wh_fig_dry,
+    hydro_fig_wet,
+    wh_fig_wet,
+    ncol = 2,
+    align = "h",
+    rel_widths = c(3, 1)
+  ) +
+  theme(
+    plot.margin = margin(0, 0, 0, 5, "mm")
+  )#t,r,b,l
+#     plot.background = element_rect(fill = "white", color = "white")
+  
+
+  # plot_grid(
+  #   psi_beta_fig_zoom_out,
+  #   psi_beta_fig_zoom_in,
+  #   ncol = 1,
+  #   align = "v")
+  
+hydro_figs
+
+y.grob <- textGrob("Discharge (cfs x 100)", gp = gpar(col = "gray10", fontsize = 10), rot = 90, vjust = 1.5)
+
+labeled_hydro_figs <- grid.arrange(hydro_figs, left = y.grob) 
+
+```
+
+```{r}
+ggsave(
+  "hydro_fig.tiff",
+  plot = labeled_hydro_figs,
+  device = "tiff",
+  path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
+  scale = 1,
+  width = 8.5,
+  height = 7,
+  units = "cm",
+  dpi = 300,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
