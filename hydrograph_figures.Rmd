@@ -44,17 +44,28 @@ con <- dbConnect(odbc(),
                  Encrypt="no")
 ```
 
-Palettes 
+
+Create standard date lookup table
 ```{r}
-wh_palette <- c("#4D617F", "#e0a81c", "#9D3D2D")
-wh_palette_bright <- c("blue", "yellow", "red")
+#create standard dates
+lookup_dates <- tibble(
+  std_date=(seq.Date(from=as.Date("1903-10-01"),to=as.Date("1904-09-30"), by="day")),
+  month=month(std_date),
+  day=day(std_date))
 ```
 
 
+Palettes red#9D3D2D #BD852C
+
+```{r}
+#wh_palette <- c("#4D617F", "#e0a81c", "#9D3D2D")
+#wh_palette <- c("#4D617F", "#9D3D2D")
+wh_palette <- c("#89C4F4", "#D93D2D")
+```
 
 
-gis_master.seagrant.reach_wettedhabitat
-rkm_length
+#Wetted Habitat Figures
+
 
 ```{r}
 wh_data <- tbl(con, Id(schema="seagrant", table="REACH_WETTED_HABITAT")) |>
@@ -71,13 +82,15 @@ wh_data <- tbl(con, Id(schema="seagrant", table="REACH_WETTED_HABITAT")) |>
   collect()
 
 ```
-
+Note that if use years other than 2017 and 2021, field_condition has other categories (not just wet and dry)
 ```{r}
 wh_summary <- wh_data |>
   filter(
-    purpose == "Base Flow"
+    purpose == "Base Flow",
+    sampleyear == 2017 |
+      sampleyear ==2021
   ) |>
-  group_by(sampleyear, map_condition) |>
+  group_by(sampleyear, field_condition) |>
   summarize(
     length_km = sum(rkm_length)
   ) |>
@@ -92,7 +105,7 @@ wh_summary <- wh_data |>
 
 ```{r}
 wh_fig <- wh_summary |>
-  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(map_condition))) +
+  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(field_condition))) +
   geom_bar(stat = "identity", legend = NULL) +
   theme_classic() +
   scale_fill_manual(values = wh_palette) +
@@ -107,22 +120,24 @@ wh_fig
   
 ```
 
+
 ```{r}
 wh_fig_dry <- wh_summary |>
   filter(sampleyear == 2021) |>
-  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(map_condition))) +
+  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(field_condition))) +
   geom_bar(stat = "identity", legend = NULL) +
   theme_classic() +
   scale_fill_manual(values = wh_palette) +
   labs(
     x = NULL,
     y = NULL,
-#    y = "Proportion",
+    title = "Dry"
+#    y = "Proportion wet or dry"
 #    caption = "N = 190 km"
   ) +
   scale_y_continuous(labels = scales::label_number(accuracy = 0.1), breaks = c(0, 0.5, 1)) +
   theme(
-    plot.title = element_text(hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 10, color = "white"),
 #    plot.caption = element_text(vjust = 3, hjust = 0.5),
     legend.position = "none",
     axis.text.x = element_blank(),
@@ -137,22 +152,23 @@ wh_fig_dry
 ```{r}
 wh_fig_wet <- wh_summary |>
   filter(sampleyear == 2017) |>
-  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(map_condition))) +
+  ggplot(aes(x = sampleyear, y = prop_wh_condition, fill = fct_rev(field_condition))) +
   geom_bar(stat = "identity", legend = NULL) +
   theme_classic() +
   scale_fill_manual(values = wh_palette) +
   scale_y_continuous(labels = scales::label_number(accuracy = 0.1), breaks = c(0, 0.5, 1)) +
   labs(
     x = NULL,
-    y = NULL
-#    y = "Proportion",
+    y = NULL,
+    title = "Wet"
+#    y = "Proportion wet or dry",
 #    caption = "N = 133 km"
   ) +
   theme(
-    plot.title = element_text(hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 10, color = "white"),
 #    plot.caption = element_text(vjust = 3, hjust = 0.5),
     legend.position = "none",
-    axis.text.x = element_blank(),
+    axis.text.x = element_text(size=8, color = "white"),
     axis.ticks.x = element_blank(),
     axis.text.y = element_text(size = 8)
   )
@@ -161,15 +177,91 @@ wh_fig_wet
 ```
 
 
-
-Create standard date lookup table
 ```{r}
-#create standard dates
-lookup_dates <- tibble(
-  std_date=(seq.Date(from=as.Date("1903-10-01"),to=as.Date("1904-09-30"), by="day")),
-  month=month(std_date),
-  day=day(std_date))
+library(cowplot)
+library(grid)
+wh_figs <- 
+  plot_grid(
+    wh_fig_dry,
+    wh_fig_wet,
+    ncol = 1,
+    nrow = 2,
+    align = "v",
+    rel_heights = c(1, 1.1)
+  ) +
+  theme(
+    plot.margin = margin(0, 0, 0, -2.5, "mm")
+  )#t,r,b,l
+#     plot.background = element_rect(fill = "white", color = "white")
+  
+
+  # plot_grid(
+  #   psi_beta_fig_zoom_out,
+  #   psi_beta_fig_zoom_in,
+  #   ncol = 1,
+  #   align = "v")
+  
+wh_figs
+
+y.grob <- textGrob(expression("Proportion wet or dry"), gp = gpar(col = "gray10", fontsize = 10), rot = 90, vjust = 0.5)
+
+labeled_wh_figs <- grid.arrange(wh_figs, left = y.grob) 
+
 ```
+
+
+```{r}
+ggsave(
+  "wh_fig.tiff",
+  plot = labeled_wh_figs,
+  device = "tiff",
+  path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
+  scale = 1,
+  width = 2.5,
+  height = 7,
+  units = "cm",
+  dpi = 300,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
+
+
+All 4 panels
+```{r}
+aligned_fig3 <- 
+  plot_grid(
+    hydro_figs,
+    labeled_wh_figs,
+    ncol = 2,
+    align = "v",
+    rel_widths = c(3.3,1)
+  )
+
+aligned_fig3
+```
+
+
+```{r}
+ggsave(
+  "fig3.tiff",
+  plot = aligned_fig3,
+  device = "tiff",
+  path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
+  scale = 1,
+  width = 9.5,
+  height = 7,
+  units = "cm",
+  dpi = 300,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
+End all 4 panels
+
+#Hydrograph figures
 
 Retrieve USGS data:
 
@@ -229,15 +321,16 @@ flow_data <- usgs_data |>
   mutate(
     year = year(date),
     month = month(date),
-    day = day(date)
+    day = day(date),
+    flow_cms = flow_cfs * 0.02831683199881
   ) |>
   left_join(lookup_dates, by = c("month", "day")) |>
-  select(tributary, date, std_date, month, day, flow_cfs) |>
+  select(tributary, date, std_date, month, day, flow_cfs, flow_cms) |>
   mutate(
     water_year = calcWaterYear(as.Date(date)),
     cohort = water_year-1,
     winter = paste(as.character(water_year-1), as.character(water_year), sep="-"),
-    disconnected = ifelse(flow_cfs < 2.1, 1, 0)
+    disconnected = ifelse(flow_cms <= 0.1, 1, 0)
   ) |> 
   filter(date > "2012-09-30" & date < "2023-10-01")
 ```
@@ -256,14 +349,14 @@ figure_data <- flow_data|>
   ) |>
 ggplot() + 
 #    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
-  geom_col(aes(x = std_date, y = disconnected * 70), fill = "gray85", width = 7) +
-  geom_line(mapping = aes(x = std_date, y = flow_cfs_hundreds), linewidth=0.7, color="#597093")+
+  geom_col(aes(x = std_date, y = disconnected * 200), fill = "gray85", width = 7) +
+  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.7, color="#597093")+
 #  geom_hline (yintercept=3, color="darkred")+
 
   scale_x_date(date_labels="%b")+
   labs(
     x = NULL,
-    y = expression("Discharge (Hundreds of ft "^3~"/s)")
+    y = expression("Discharge (m"^3~"s"^-1~")")
   ) +
   theme_bw()+ #base_size=12
   theme(
@@ -287,8 +380,8 @@ hydro_fig_dry <- flow_data|>
   filter (water_year == 2021) |>
 ggplot() + 
 #    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
-  geom_col(aes(x = std_date, y = disconnected * 70), fill = "gray85", width = 7) +
-  geom_line(mapping = aes(x = std_date, y = flow_cfs_hundreds), linewidth=0.5, color="#4D617F")+
+  geom_col(aes(x = std_date, y = disconnected * 200), fill = "gray85", width = 7) +
+  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.5, color="#4D617F")+
 #  geom_hline (yintercept=3, color="darkred")+
 
   scale_x_date(date_labels="%b")+
@@ -306,8 +399,8 @@ ggplot() +
         axis.text.y = element_text(size=8),
         axis.text.x = element_blank(),
 #        axis.text.x = element_text(size=10), #,angle = 90
-        panel.grid.major = element_line(color="gray97"),
-        panel.grid.minor = element_line(color="gray97"),
+        # panel.grid.major = element_line(color="gray97"),
+        # panel.grid.minor = element_line(color="gray97"),
         axis.ticks.x = element_blank()
   )
 
@@ -320,8 +413,8 @@ hydro_fig_wet <- flow_data|>
   filter (water_year == 2017) |>
 ggplot() + 
 #    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
-  geom_col(aes(x = std_date, y = disconnected * 70), fill = "gray85", width = 7) +
-  geom_line(mapping = aes(x = std_date, y = flow_cfs_hundreds), linewidth=0.5, color="#4D617F")+
+  geom_col(aes(x = std_date, y = disconnected * 200), fill = "gray85", width = 7) +
+  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.5, color="#4D617F")+
 #  geom_hline (yintercept=3, color="darkred")+
 
   scale_x_date(date_labels="%b")+
@@ -337,17 +430,69 @@ ggplot() +
         plot.title = element_text(hjust = 0.5, size = 10),
 #        axis.title.y = element_text(size=9, face="bold"),
         axis.text.y = element_text(size=8), 
-        axis.text.x = element_text(size=8), #,angle = 90
-        panel.grid.major = element_line(color="gray97"),
-        panel.grid.minor = element_line(color="gray97"))
+        axis.text.x = element_text(size=8) #,angle = 90
+        # panel.grid.major = element_line(color="gray97"),
+        # panel.grid.minor = element_line(color="gray97"))
+)
 
 hydro_fig_wet
 ```
+
 
 ```{r}
 library(cowplot)
 library(grid)
 hydro_figs <- 
+  plot_grid(
+    hydro_fig_dry,
+    hydro_fig_wet,
+    ncol = 1,
+    nrow = 2,
+    align = "v",
+    rel_heights = c(1, 1.1)
+  ) +
+  theme(
+    plot.margin = margin(0, 0, 0, -2, "mm")
+  )#t,r,b,l
+#     plot.background = element_rect(fill = "white", color = "white")
+  
+
+  # plot_grid(
+  #   psi_beta_fig_zoom_out,
+  #   psi_beta_fig_zoom_in,
+  #   ncol = 1,
+  #   align = "v")
+  
+hydro_figs
+
+y.grob <- textGrob(expression("Discharge (m"^3*"s"^-1*")"), gp = gpar(col = "gray10", fontsize = 10), rot = 90, vjust = 0.5)
+
+hydro_figs <- grid.arrange(hydro_figs, left = y.grob) 
+
+```
+
+```{r}
+ggsave(
+  "hydro_fig.tiff",
+  plot = hydro_figs,
+  device = "tiff",
+  path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
+  scale = 1,
+  width = 7.5,
+  height = 7,
+  units = "cm",
+  dpi = 300,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
+
+Version including all 4 figs:
+```{r}
+library(cowplot)
+library(grid)
+all_figs <- 
   plot_grid(
     hydro_fig_dry,
     wh_fig_dry,
@@ -369,11 +514,11 @@ hydro_figs <-
   #   ncol = 1,
   #   align = "v")
   
-hydro_figs
+all_figs
 
-y.grob <- textGrob("Discharge (cfs x 100)", gp = gpar(col = "gray10", fontsize = 10), rot = 90, vjust = 1.5)
+y.grob <- textGrob(expression("Discharge (m"^3*"s"^-1*")"), gp = gpar(col = "gray10", fontsize = 10), rot = 90, vjust = 1.7)
 
-labeled_hydro_figs <- grid.arrange(hydro_figs, left = y.grob) 
+labeled_hydro_figs <- grid.arrange(all_figs, left = y.grob) 
 
 ```
 

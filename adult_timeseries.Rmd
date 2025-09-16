@@ -1,0 +1,77 @@
+---
+title: "adult_timeseries"
+output: html_document
+date: "2025-09-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(grid)
+library(gridExtra)
+```
+1 column (85 mm) or 2 columns (180 mm).
+
+```{r}
+adult_ts <- read.csv("./data/adult_timeseries.csv")
+
+```
+
+```{r}
+
+origin_palette <- c("gray80", "gray5", "gray50")
+origin_velevls <- c("hatchery", "natural", "unknown")
+```
+
+
+
+```{r}
+adult_ts_fig <- adult_ts |>
+ggplot() + 
+  geom_col(aes(x = year, y = n, fill = origin)) +
+  scale_fill_manual (values = origin_palette) +
+  labs(
+    x = "Adult return winter",
+    y = "Number of fish"
+  ) +
+  theme_classic() +
+  scale_y_continuous(limits = c(0, 550), expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.02, 0.02)) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.85),
+    legend.title = element_blank(),
+    legend.key.width = unit(0.4, "cm"), 
+    legend.key.height = unit(0.4, "cm"), 
+    legend.text = element_text(size = 9),
+    axis.title.y = element_text(vjust = 1),
+    axis.title.x = element_text(vjust = 0),
+  )
+adult_ts_fig
+```
+
+
+```{r}
+ggsave(
+  "adult_ts_fig.tiff",
+  plot = adult_ts_fig,
+  device = "tiff",
+  path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
+  scale = 1,
+  width = 8.5,
+  height = 5.5,
+  units = "cm",
+  dpi = 300,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
+
+
+
