@@ -19,21 +19,24 @@ library(gridExtra)
 
 ```{r}
 adult_ts <- read.csv("./data/adult_timeseries.csv")
+redd_ts <- read.csv("./data/redd_ts.csv")
 
 ```
 
 ```{r}
 
 origin_palette <- c("gray80", "gray5", "gray50")
-origin_velevls <- c("hatchery", "natural", "unknown")
+redd_palette <-  c( "gray80", "gray5")
+origin_levels <- c("hatchery", "natural", "unknown")
+redd_levels <- c("below", "above")
 ```
 
-
+#Adults
 
 ```{r}
 adult_ts_fig <- adult_ts |>
 ggplot() + 
-  geom_col(aes(x = year, y = n, fill = origin)) +
+  geom_col(aes(x = year, y = n, fill = origin), width = 0.8) +
   scale_fill_manual (values = origin_palette) +
   labs(
     x = "Adult return winter",
@@ -44,34 +47,89 @@ ggplot() +
   scale_x_continuous(expand = c(0.02, 0.02)) +
   theme(
     legend.position = "inside",
-    legend.position.inside = c(0.2, 0.85),
+#    legend.position.inside = c(0.2, 0.85), #narrow placement
+    legend.position.inside = c(0.11, 0.85), #wide placement
     legend.title = element_blank(),
     legend.key.width = unit(0.4, "cm"), 
     legend.key.height = unit(0.4, "cm"), 
     legend.text = element_text(size = 9),
     axis.title.y = element_text(vjust = 1),
     axis.title.x = element_text(vjust = 0),
+    axis.line = element_line(linewidth = 0.3)
   )
 adult_ts_fig
 ```
 
-
+eps to create high quality pdf files
+can also use tiff
 ```{r}
 ggsave(
-  "adult_ts_fig.tiff",
+  "adult_ts_fig_wide.eps",
+#  "adult_ts_fig_wide.tiff",
   plot = adult_ts_fig,
-  device = "tiff",
+#  device = "tiff",
+  device = "eps",
   path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
   scale = 1,
-  width = 8.5,
-  height = 5.5,
+  width = 17,
+  height = 6,
+#  height = 5.5,
   units = "cm",
-  dpi = 300,
+  dpi = 600,
   limitsize = TRUE,
   bg = NULL,
   create.dir = FALSE
 )
 ```
 
+
+#Redds
+
+```{r}
+redd_ts_fig <- redd_ts |>
+ggplot(aes(x = year, y = redd_n, fill = fct_rev(as.factor(barrier)))) + 
+  geom_col(position = position_dodge(width = 0.7), width = 0.7) +
+  geom_vline(xintercept = 2015.5, linetype = "21", linewidth = 0.5, color = "gray30") +
+  scale_fill_manual (values = redd_palette) +
+  labs(
+    x = "Adult return winter",
+    y = "Number of redds"
+  ) +
+  theme_classic() +
+  scale_y_continuous(limits = c(0, 25), expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0.02, 0.02), breaks = unique(redd_ts$year)) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.07, 0.8),
+    legend.title = element_blank(),
+    legend.key.width = unit(0.4, "cm"), 
+    legend.key.height = unit(0.4, "cm"), 
+    legend.text = element_text(size = 9),
+    axis.title.y = element_text(vjust = 1),
+    axis.title.x = element_text(vjust = 0),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()    
+  )
+redd_ts_fig
+```
+
+
+```{r}
+ggsave(
+  "redd_ts_fig_new.tiff",
+  plot = redd_ts_fig,
+  device = "tiff",
+  path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
+  scale = 1,
+  width = 18,
+  height = 5.5,
+  units = "cm",
+  dpi = 600,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
 
 

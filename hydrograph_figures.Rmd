@@ -60,7 +60,9 @@ Palettes red#9D3D2D #BD852C
 ```{r}
 #wh_palette <- c("#4D617F", "#e0a81c", "#9D3D2D")
 #wh_palette <- c("#4D617F", "#9D3D2D")
-wh_palette <- c("#89C4F4", "#D93D2D")
+#wh_palette <- c("#89C4F4", "#D93D2D")
+#wh_palette <- c("#99CCFF", "#BF2C23")
+wh_palette <- c("#99C6FD", "#BF2C23")
 ```
 
 
@@ -212,15 +214,15 @@ labeled_wh_figs <- grid.arrange(wh_figs, left = y.grob)
 
 ```{r}
 ggsave(
-  "wh_fig.tiff",
+  "wh_fig.eps",
   plot = labeled_wh_figs,
-  device = "tiff",
+  device = "eps",
   path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
   scale = 1,
   width = 2.5,
   height = 7,
   units = "cm",
-  dpi = 300,
+  dpi = 600,
   limitsize = TRUE,
   bg = NULL,
   create.dir = FALSE
@@ -245,15 +247,15 @@ aligned_fig3
 
 ```{r}
 ggsave(
-  "fig3.tiff",
+  "fig3_eps.eps",
   plot = aligned_fig3,
-  device = "tiff",
+  device = "eps",
   path = "C:/Users/mobedzinski/UCBerkeley/Manuscripts/IMW/imw/figures",
   scale = 1,
   width = 9.5,
   height = 7,
   units = "cm",
-  dpi = 300,
+  dpi = 600,
   limitsize = TRUE,
   bg = NULL,
   create.dir = FALSE
@@ -381,7 +383,7 @@ hydro_fig_dry <- flow_data|>
 ggplot() + 
 #    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
   geom_col(aes(x = std_date, y = disconnected * 200), fill = "gray85", width = 7) +
-  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.5, color="#4D617F")+
+  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.5, color="#4D617F")+  ##4D617F
 #  geom_hline (yintercept=3, color="darkred")+
 
   scale_x_date(date_labels="%b")+
@@ -414,7 +416,7 @@ hydro_fig_wet <- flow_data|>
 ggplot() + 
 #    geom_ribbon(mapping = aes(x = std_date, y = flow_cfs_thousands, ymin=.6, ymax=flow_cfs_thousands), fill="gray50")+
   geom_col(aes(x = std_date, y = disconnected * 200), fill = "gray85", width = 7) +
-  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.5, color="#4D617F")+
+  geom_line(mapping = aes(x = std_date, y = flow_cms), linewidth=0.5, color="#4D617F")+  #4D617F
 #  geom_hline (yintercept=3, color="darkred")+
 
   scale_x_date(date_labels="%b")+
